@@ -10,7 +10,6 @@ from typing import Any, Dict, List
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -43,6 +42,7 @@ def get_db_connection() -> sqlite3.Connection:
 
 
 def init_db() -> None:
+    """Initialize database with signals table"""
     conn = get_db_connection()
     try:
         conn.execute(
@@ -72,6 +72,7 @@ init_db()
 
 
 def dominant_frequency(samples: np.ndarray, sample_rate: int) -> tuple[float, float]:
+    """Calculate dominant frequency using FFT"""
     samples = np.asarray(samples, dtype=np.float32)
     if samples.size < 2:
         return 0.0, 0.0
@@ -98,6 +99,7 @@ def generate_waveform(
     waveform: str = "sine",
     amplitude: float = 0.5,
 ) -> np.ndarray:
+    """Generate waveform signal"""
     total_samples = int(sample_rate * duration)
     t = np.linspace(0, duration, total_samples, endpoint=False)
 
@@ -125,6 +127,7 @@ def store_signal_record(
     waveform: str | None = None,
     payload: Any = None,
 ) -> Dict[str, Any]:
+    """Store signal record in database"""
     created_at = datetime.now(timezone.utc).isoformat()
     conn = get_db_connection()
     try:
@@ -170,11 +173,13 @@ def store_signal_record(
 
 @app.get("/")
 async def index() -> FileResponse:
+    """Serve main HTML page"""
     return FileResponse(TEMPLATE_DIR / "index.html")
 
 
 @app.get("/health")
 async def health() -> Dict[str, str]:
+    """Health check endpoint"""
     return {
         "status": "ok",
         "service": "audio-signal-processing-platform",
@@ -184,6 +189,7 @@ async def health() -> Dict[str, str]:
 
 @app.get("/api/history")
 async def get_history(limit: int = 25) -> List[Dict[str, Any]]:
+    """Get signal history from database"""
     conn = get_db_connection()
     try:
         rows = conn.execute(
@@ -226,6 +232,7 @@ async def synthesize_signal(
     waveform: str = "sine",
     amplitude: float = 0.5,
 ) -> Dict[str, Any]:
+    """Synthesize and store a signal"""
     signal = generate_waveform(
         frequency=frequency,
         duration=duration,
@@ -270,13 +277,13 @@ async def synthesize_signal(
 
 @app.post("/api/analyze")
 async def analyze_upload(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Analyze uploaded audio file"""
     try:
         contents = await file.read()
         
         try:
             import soundfile as sf
             import io
-            arr = np.frombuffer(contents, dtype=np.uint8)
             buffer = io.BytesIO(contents)
             audio, sr = sf.read(buffer, dtype="float32", always_2d=False)
         except Exception:
@@ -314,6 +321,7 @@ async def analyze_upload(file: UploadFile = File(...)) -> Dict[str, Any]:
 
 @app.websocket("/ws/audio")
 async def audio_ws(websocket: WebSocket):
+    """WebSocket endpoint for real-time audio streaming"""
     await websocket.accept()
     try:
         while True:
