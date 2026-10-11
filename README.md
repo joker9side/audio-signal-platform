@@ -1,2 +1,7 @@
-# audio-signal-platform
-Real-time audio signal synthesis and analysis platform with database storage
+__pycache__/
+*.pyc
+.venv/
+.env
+.DS_Store
+*.sqlite3
+*.db

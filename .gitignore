@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audio Signal Processing Platform</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --card: #1f2937;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --blue: #38bdf8;
+      --green: #22c55e;
+      --yellow: #fbbf24;
+      --red: #f87171;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, sans-serif;
+    }
+
+    .container {
+      max-width: 1220px;
+      margin: 30px auto;
+      padding: 20px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid #374151;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 18px;
+      align-items: center;
+    }
+
+    .controls input, .controls select {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #374151;
+      background: #0b1220;
+      color: white;
+      font-size: 14px;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 18px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .primary { background: var(--blue); color: #052336; }
+    .success { background: var(--green); color: #052e16; }
+    .warning { background: var(--yellow); color: #3f2d0a; }
+    .danger { background: var(--red); color: white; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid #374151;
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-size: 28px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    .canvas-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 260px;
+      background: #020817;
+      border-radius: 12px;
+      border: 1px solid #374151;
+      display: block;
+    }
+
+    .status {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .history {
+      margin-top: 20px;
+      background: #0b1220;
+      border: 1px solid #374151;
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    th, td {
+      border-bottom: 1px solid #374151;
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    th {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="panel">
+      <div class="header">
+        <div class="title">Audio Signal Processing Platform</div>
+      </div>
+
+      <div class="controls">
+        <button class="primary" id="startMicBtn">เปิดไมโครโฟน</button>
+        <button class="danger" id="stopMicBtn">หยุดไมโครโฟน</button>
+
+        <input id="frequencyInput" type="number" value="440" min="20" max="20000" />
+        <select id="waveformSelect">
+          <option value="sine">Sine</option>
+          <option value="square">Square</option>
+          <option value="triangle">Triangle</option>
+          <option value="saw">Saw</option>
+        </select>
+        <button class="success" id="playToneBtn">สังเคราะห์เสียง</button>
+        <button class="warning" id="stopToneBtn">หยุดเสียง</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat-card">
+          <div class="label">Dominant Frequency</div>
+          <div class="value" id="freqValue">0 Hz</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">RMS</div>
+          <div class="value" id="rmsValue">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Signal State</div>
+          <div class="value" id="signalTypeValue">Idle</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">WebSocket</div>
+          <div class="value" id="wsValue">Waiting</div>
+        </div>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="waveCanvas" width="520" height="260"></canvas>
+        <canvas id="fftCanvas" width="520" height="260"></canvas>
+      </div>
+
+      <div class="status" id="messageBox">รอข้อมูลเสียง...</div>
+
+      <div class="history">
+        <h3>Recent Stored Signals</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Source</th>
+              <th>Type</th>
+              <th>Dominant Freq</th>
+              <th>RMS</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${wsProtocol}://${location.host}/ws/audio`);
+
+    const startMicBtn = document.getElementById("startMicBtn");
+    const stopMicBtn = document.getElementById("stopMicBtn");
+    const playToneBtn = document.getElementById("playToneBtn");
+    const stopToneBtn = document.getElementById("stopToneBtn");
+
+    const frequencyInput = document.getElementById("frequencyInput");
+    const waveformSelect = document.getElementById("waveformSelect");
+
+    const freqValue = document.getElementById("freqValue");
+    const rmsValue = document.getElementById("rmsValue");
+    const signalTypeValue = document.getElementById("signalTypeValue");
+    const wsValue = document.getElementById("wsValue");
+    const messageBox = document.getElementById("messageBox");
+    const historyBody = document.getElementById("historyBody");
+
+    const waveCanvas = document.getElementById("waveCanvas");
+    const fftCanvas = document.getElementById("fftCanvas");
+    const waveCtx = waveCanvas.getContext("2d");
+    const fftCtx = fftCanvas.getContext("2d");
+
+    let audioCtx = null;
+    let analyser = null;
+    let micStream = null;
+    let micSourceNode = null;
+    let synthOsc = null;
+    let synthGain = null;
+    let isMicRunning = false;
+
+    function updateStatus(text) {
+      messageBox.textContent = text;
+      wsValue.textContent = text;
+    }
+
+    function drawWaveform(data) {
+      const width = waveCanvas.width;
+      const height = waveCanvas.height;
+      waveCtx.clearRect(0, 0, width, height);
+      waveCtx.fillStyle = "#020817";
+      waveCtx.fillRect(0, 0, width, height);
+
+      waveCtx.strokeStyle = "#38bdf8";
+      waveCtx.lineWidth = 2;
+      waveCtx.beginPath();
+
+      const mid = height / 2;
+      for (let i = 0; i < data.length; i++) {
+        const x = (i / (data.length - 1)) * width;
+        const y = mid - data[i] * height * 0.45;
+        if (i === 0) waveCtx.moveTo(x, y);
+        else waveCtx.lineTo(x, y);
+      }
+      waveCtx.stroke();
+    }
+
+    function drawSpectrum(magnitudes) {
+      const width = fftCanvas.width;
+      const height = fftCanvas.height;
+      fftCtx.clearRect(0, 0, width, height);
+      fftCtx.fillStyle = "#020817";
+      fftCtx.fillRect(0, 0, width, height);
+
+      fftCtx.strokeStyle = "#22c55e";
+      fftCtx.lineWidth = 2;
+      fftCtx.beginPath();
+
+      const maxVal = Math.max(...magnitudes, 1e-6);
+      for (let i = 0; i < magnitudes.length; i++) {
+        const x = (i / (magnitudes.length - 1)) * width;
+        const y = height - (magnitudes[i] / maxVal) * (height - 20) - 10;
+        if (i === 0) fftCtx.moveTo(x, y);
+        else fftCtx.lineTo(x, y);
+      }
+      fftCtx.stroke();
+    }
+
+    function renderHistory(rows) {
+      if (!Array.isArray(rows)) return;
+
+      historyBody.innerHTML = rows.map((row) => {
+        const created = row.created_at ? new Date(row.created_at).toLocaleString() : "-";
+        const freq = Number(row.dominant_frequency || 0).toFixed(1);
+        const rms = Number(row.rms || 0).toFixed(4);
+        return `
+          <tr>
+            <td>${created}</td>
+            <td>${row.source}</td>
+            <td>${row.signal_type}</td>
+            <td>${freq} Hz</td>
+            <td>${rms}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    async function loadHistory() {
+      try {
+        const res = await fetch("/api/history?limit=10");
+        const data = await res.json();
+        renderHistory(data);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function sendToServer(samples, sampleRate) {
+      if (socket.readyState === WebSocket.OPEN) {
+        const payload = {
+          samples: Array.from(samples),
+          sampleRate,
+          type: "mic"
+        };
+        socket.send(JSON.stringify(payload));
+      }
+    }
+
+    function processMicInput() {
+      if (!analyser) return;
+
+      const timeData = new Float32Array(analyser.fftSize);
+      const freqData = new Float32Array(analyser.frequencyBinCount);
+
+      const loop = () => {
+        if (!isMicRunning) return;
+
+        analyser.getFloatTimeDomainData(timeData);
+        analyser.getFloatFrequencyData(freqData);
+
+        const signal = Array.from(timeData);
+        drawWaveform(signal);
+
+        const spectrum = Array.from(freqData).map(v => Math.max(0, (v + 140) / 140));
+        drawSpectrum(spectrum);
+
+        const rms = Math.sqrt(signal.reduce((sum, v) => sum + v * v, 0) / signal.length);
+        rmsValue.textContent = rms.toFixed(4);
+
+        sendToServer(signal, audioCtx.sampleRate);
+        requestAnimationFrame(loop);
+      };
+
+      loop();
+    }
+
+    socket.onopen = () => {
+      updateStatus("เชื่อมต่อ WebSocket แล้ว");
+      wsValue.textContent = "Online";
+      loadHistory();
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const freq = Number(data.dominantFrequencyHz || 0);
+      const rms = Number(data.rms || 0);
+
+      freqValue.textContent = `${freq.toFixed(1)} Hz`;
+      rmsValue.textContent = rms.toFixed(4);
+
+      if (freq > 20) {
+        signalTypeValue.textContent = "Detected";
+      } else {
+        signalTypeValue.textContent = "Idle";
+      }
+
+      loadHistory();
+    };
+
+    socket.onclose = () => {
+      wsValue.textContent = "Offline";
+      updateStatus("ตัดการเชื่อมต่อ WebSocket");
+    };
+
+    async function startMicrophone() {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micSourceNode = audioCtx.createMediaStreamSource(micStream);
+
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.8;
+
+        micSourceNode.connect(analyser);
+
+        isMicRunning = true;
+        signalTypeValue.textContent = "Mic Live";
+        updateStatus("ไมโครโฟนเปิดใช้งาน");
+        processMicInput();
+      } catch (error) {
+        console.error(error);
+        updateStatus("ไมโครโฟนไม่พร้อมใช้งาน");
+      }
+    }
+
+    function stopMicrophone() {
+      isMicRunning = false;
+
+      if (micStream) {
+        micStream.getTracks().forEach(track => track.stop());
+        micStream = null;
+      }
+
+      if (micSourceNode) {
+        micSourceNode.disconnect();
+        micSourceNode = null;
+      }
+
+      signalTypeValue.textContent = "Idle";
+      updateStatus("ปิดไมโครโฟน");
+    }
+
+    function playTone() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      const frequency = Number(frequencyInput.value || 440);
+      const waveform = waveformSelect.value;
+
+      oscillator.type = waveform;
+      oscillator.frequency.value = frequency;
+      gainNode.gain.value = 0.08;
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.start();
+
+      synthOsc = oscillator;
+      synthGain = gainNode;
+
+      signalTypeValue.textContent = "Synth";
+      updateStatus(`กำลังสังเคราะห์เสียง ${frequency} Hz`);
+    }
+
+    function stopTone() {
+      if (synthOsc) {
+        synthOsc.stop();
+        synthOsc.disconnect();
+        synthOsc = null;
+      }
+
+      if (synthGain) {
+        synthGain.disconnect();
+        synthGain = null;
+      }
+
+      signalTypeValue.textContent = "Idle";
+      updateStatus("หยุดสังเคราะห์เสียง");
+    }
+
+    startMicBtn.addEventListener("click", startMicrophone);
+    stopMicBtn.addEventListener("click", stopMicrophone);
+    playToneBtn.addEventListener("click", playTone);
+    stopToneBtn.addEventListener("click", stopTone);
+
+    drawWaveform(new Array(256).fill(0));
+    drawSpectrum(new Array(128).fill(0));
+    loadHistory();
+  </script>
+</body>
+</html>
